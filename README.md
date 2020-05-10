@@ -9,6 +9,8 @@ conda create -n prophet -c conda-forge python=3.7 ipykernel fbprophet matplotlib
 ### Run
 
 conda activate prophet
-python covid_plot.py --state Texas
+python covid_plot.py --state Texas --output
 
 State is optional. If not included, default is all United States.
+
+Output flag will write plot to file, using name [state].png.
