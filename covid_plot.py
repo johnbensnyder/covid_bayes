@@ -24,6 +24,7 @@ def gen_prediction(df):
 	m.fit(df_previous)
 	future = m.make_future_dataframe(periods=10, freq='W')
 	forecast = m.predict(future)
+	forecast['ds'] = pd.to_datetime(forecast['ds'].dt.to_period("W-SAT").dt.end_time.dt.date)
 	return forecast
 
 def format_results(df, forecast, state):
@@ -32,9 +33,9 @@ def format_results(df, forecast, state):
 	df_pred.columns = ['ds', 'actual']
 	# drop last two weeks because data is incomplete
 	df_pred = df_pred.iloc[0:df_pred.shape[0]-2]
-	df_pred['ds'] = df_pred['ds'] + pd.to_timedelta(1, unit='d')
+	#df_pred['ds'] = df_pred['ds'] + pd.to_timedelta(1, unit='d')
 	df_merge = df_pred.merge(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']], how='inner', on='ds')
-
+	df_merge = df_merge.loc[df_merge['ds']>="2020-03-01"]
 	end_date = list(df_merge['ds'])[-1]
 
 	title = "Bayesian time series forecast for expected {0} weekly deaths vs. observed".format(state)
@@ -45,10 +46,12 @@ def format_results(df, forecast, state):
                   "With maximum a posteriori estimate {0:.2f}".format((df_merge['actual'] - df_merge['yhat']).sum())])
 	return df_pred, df_merge, title, caption
 
-def plot(forecast, df_pred, df_merge, title, caption, output, state):
+def plot(forecast, df_pred, df_merge, title, caption, output, state, start_date):
 	# Plot result
 
 	fig, ax = plt.subplots(figsize=(15, 10))
+	if start_date:
+		forecast = forecast.loc[forecast['ds']>=start_date]
 	ax.plot(forecast['ds'], forecast['yhat'])
 	ax.fill_between(forecast['ds'], forecast['yhat_lower'], forecast['yhat_upper'], facecolor=(0,0,1,.4), edgecolor=(0,0,0,.5), label="Baseline")
 	ax.plot(df_pred['ds'], df_pred['actual'], color=(1,.5,.0))
@@ -63,20 +66,21 @@ def plot(forecast, df_pred, df_merge, title, caption, output, state):
 		plt.savefig(state)
 	plt.show()
 
-def main(state, output):
+def main(state, output, date):
 	data_source = "https://data.cdc.gov/api/views/xkkf-xrst/rows.csv?accessType=DOWNLOAD&bom=true&format=true%20target="	
 	df = get_data(data_source, state)
 	forecast = gen_prediction(df)
 	df_pred, df_merge, title, caption = format_results(df, forecast, state)
-	plot(forecast, df_pred, df_merge, title, caption, output, state)
+	plot(forecast, df_pred, df_merge, title, caption, output, state, date)
 
 def add_cli_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-s', '--state', default='United States')
 	parser.add_argument('-o', '--output', action='store_true')
+	parser.add_argument('-d', '--date', default='')
 	return parser
 
 if __name__=='__main__':
 	cmdline = add_cli_args()
 	FLAGS, unknown_args = cmdline.parse_known_args()	
-	main(FLAGS.state, FLAGS.output)
+	main(FLAGS.state, FLAGS.output, FLAGS.date)
